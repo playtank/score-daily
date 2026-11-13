@@ -2,6 +2,7 @@ package com.playtank.scoredaily.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,16 +13,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
@@ -65,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -117,7 +121,8 @@ fun ScoreScreen(viewModel: ScoreViewModel = viewModel()) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item { Spacer(Modifier.height(8.dp)) }
@@ -370,7 +375,7 @@ private fun ScoreStat(label: String, value: Int, modifier: Modifier = Modifier) 
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = if (value >= 0) "+$value" else "$value",
+            text = if (value >= 0) "$value" else "$value",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold,
             color = color,
@@ -383,13 +388,15 @@ private fun ScoreStat(label: String, value: Int, modifier: Modifier = Modifier) 
 // Score input card
 // ─────────────────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ScoreInputCard(onAddScore: (Int, String?) -> Unit) {
-    var customDelta  by remember { mutableStateOf("") }
-    var reason       by remember { mutableStateOf("") }
-    var deltaError   by remember { mutableStateOf(false) }
+    var customDelta by remember { mutableStateOf("") }
+    var reason      by remember { mutableStateOf("") }
+    var deltaError  by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
 
     fun submit(delta: Int) {
         onAddScore(delta, reason.ifBlank { null })
@@ -413,7 +420,26 @@ private fun ScoreInputCard(onAddScore: (Int, String?) -> Unit) {
                 fontWeight = FontWeight.SemiBold
             )
 
-            // Quick ± 5 buttons
+            // Reason input — bringIntoViewRequester scrolls it above the keyboard on focus
+            OutlinedTextField(
+                value = reason,
+                onValueChange = { reason = it },
+                label = { Text("Reason (optional)") },
+                placeholder = { Text("Why?") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(bringIntoViewRequester)
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            scope.launch { bringIntoViewRequester.bringIntoView() }
+                        }
+                    }
+            )
+
+            // Quick ±5 buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -425,8 +451,6 @@ private fun ScoreInputCard(onAddScore: (Int, String?) -> Unit) {
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
                     Text("+5")
                 }
                 Button(
@@ -463,18 +487,6 @@ private fun ScoreInputCard(onAddScore: (Int, String?) -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            // Reason input
-            OutlinedTextField(
-                value = reason,
-                onValueChange = { reason = it },
-                label = { Text("Reason (optional)") },
-                placeholder = { Text("Why?") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
 
             // Submit custom
             FilledTonalButton(
